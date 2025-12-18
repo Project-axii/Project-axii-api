@@ -10,10 +10,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-include_once '../config/database.php';
-include_once '../models/User.php';
-include_once '../models/Log.php';
-include_once '../models/Notification.php';
+include_once '../../config/database.php';
+include_once '../../models/User.php';
+include_once '../../models/Log.php';
+include_once '../../models/Notification.php';
 
 $database = new Database();
 $db = $database->getConnection();

@@ -10,8 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-include_once '../config/database.php';
-include_once '../models/Log.php';
+include_once '../../config/database.php';
+include_once '../../models/Log.php';
 
 $database = new Database();
 $db = $database->getConnection();

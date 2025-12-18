@@ -19,6 +19,10 @@ class Device {
         $this->conn = $db;
     }
 
+    public function getTableName() {
+    return $this->table_name;
+}
+
     // Listar todos os dispositivos do usuário
     public function getByUser($user_id) {
         $query = "SELECT * FROM " . $this->table_name . " 

@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 include_once '../../config/database.php';
 include_once '../../models/User.php';
 include_once '../../models/Log.php';
+include_once '../middleware/rate_limiter.php';
+
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../../../../..');
 $dotenv->load();
@@ -27,6 +29,11 @@ $bucket_name = $_ENV['SUPABASE_BUCKET'] ?: 'profile-photos';
 
 $database = new Database();
 $db = $database->getConnection();
+
+$limiter    = new RateLimiter($db);
+$ip_origem  = $_SERVER['REMOTE_ADDR'];
+
+$limiter->check('login', $ip_origem, 5, 10);
 
 $user = new User($db);
 $log = new Log($db);

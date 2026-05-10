@@ -12,9 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 include_once '../../config/database.php';
 include_once '../../models/Log.php';
+include_once '../middleware/rate_limiter.php';
 
 $database = new Database();
 $db = $database->getConnection();
+
+$limiter    = new RateLimiter($db);
+$ip_origem  = $_SERVER['REMOTE_ADDR'];
+
+$limiter->check('Logout', $ip_origem, 5, 10);
+
 $log = new Log($db);
 
 $data = json_decode(file_get_contents("php://input"));

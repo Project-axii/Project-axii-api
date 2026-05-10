@@ -14,9 +14,15 @@ include_once '../../config/database.php';
 include_once '../../models/User.php';
 include_once '../../models/Log.php';
 include_once '../../models/Notification.php';
+include_once '../middleware/rate_limiter.php';
 
 $database = new Database();
 $db = $database->getConnection();
+
+$limiter    = new RateLimiter($db);
+$ip_origem  = $_SERVER['REMOTE_ADDR'];
+
+$limiter->check('Register', $ip_origem, 5, 10);
 
 $user = new User($db);
 $log = new Log($db);

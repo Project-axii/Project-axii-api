@@ -1,7 +1,6 @@
 # Project Axii — Documentação Completa da API
 
 **Versão:** 1.0  
-**Base URL:** `https://<seu-domínio>/api`  
 **Formato:** JSON (`Content-Type: application/json`)  
 **Charset:** UTF-8
 
@@ -1847,7 +1846,3 @@ Content-Type: application/json
 | `GET` | `/notifications/read.php` | ✅ | Listar notificações |
 | `PUT` | `/notifications/mark_read.php` | ✅ | Marcar notificação(ões) como lida(s) |
 | `DELETE` | `/notifications/delete.php` | ✅ | Remover notificação |
-
----
-
-*Documentação gerada em 13 de junho de 2026.*

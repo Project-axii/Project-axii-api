@@ -1,12 +1,11 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: PUT, OPTIONS");
 header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("X-Content-Type-Options: nosniff");
+header("X-Frame-Options: DENY");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -16,62 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 try {
     include_once '../../config/database.php';
     include_once '../../models/Device.php';
+    include_once '../middleware/auth.php';
 
-    $token = null;
-    
-    if (function_exists('getallheaders')) {
-        $headers = getallheaders();
-        if (isset($headers['Authorization'])) {
-            $token = str_replace('Bearer ', '', $headers['Authorization']);
-        }
-    }
-    
-    if (!$token && function_exists('apache_request_headers')) {
-        $headers = apache_request_headers();
-        if (isset($headers['Authorization'])) {
-            $token = str_replace('Bearer ', '', $headers['Authorization']);
-        }
-    }
-    
-    if (!$token && isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        $token = str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']);
-    }
-    
-    if (!$token && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-        $token = str_replace('Bearer ', '', $_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
-    }
-
-    if (!$token) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Token não fornecido"
-        ]);
-        exit();
-    }
-
-    try {
-        $decoded = json_decode(base64_decode($token));
-        
-        if (!$decoded || !isset($decoded->id) || !isset($decoded->exp)) {
-            throw new Exception("Token inválido");
-        }
-        
-        if ($decoded->exp < time()) {
-            throw new Exception("Token expirado");
-        }
-        
-        $user_id = $decoded->id;
-        
-    } catch (Exception $e) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Token inválido ou expirado",
-            "error" => $e->getMessage()
-        ]);
-        exit();
-    }
+    $authUser = requireAuth();
+    $user_id  = $authUser['id'];
 
     $data = json_decode(file_get_contents("php://input"));
 
@@ -87,16 +34,12 @@ try {
     $device_id = $data->id;
 
     $database = new Database();
-    $db = $database->getConnection();
-    
-    if (!$db) {
-        throw new Exception("Falha na conexão com o banco de dados");
-    }
+    $db       = $database->getConnection();
 
     $check_query = "SELECT id FROM dispositivos WHERE id = ? AND id_user = ?";
-    $check_stmt = $db->prepare($check_query);
+    $check_stmt  = $db->prepare($check_query);
     $check_stmt->execute([$device_id, $user_id]);
-    
+
     if ($check_stmt->rowCount() === 0) {
         http_response_code(404);
         echo json_encode([
@@ -117,7 +60,7 @@ try {
     if (isset($data->ip)) {
         $ip_check = $db->prepare("SELECT id FROM dispositivos WHERE ip = ? AND id_user = ? AND id != ?");
         $ip_check->execute([$data->ip, $user_id, $device_id]);
-        
+
         if ($ip_check->rowCount() > 0) {
             http_response_code(409);
             echo json_encode([
@@ -126,7 +69,7 @@ try {
             ]);
             exit();
         }
-        
+
         $update_fields[] = "ip = ?";
         $update_values[] = $data->ip;
     }
@@ -178,24 +121,20 @@ try {
         exit();
     }
 
-    $update_query = "UPDATE dispositivos SET " . implode(", ", $update_fields) . " WHERE id = ? AND id_user = ?";
+    $update_query  = "UPDATE dispositivos SET " . implode(", ", $update_fields) . " WHERE id = ? AND id_user = ?";
     $update_values[] = $device_id;
     $update_values[] = $user_id;
-    
-    $update_stmt = $db->prepare($update_query);
-    
-    if ($update_stmt->execute($update_values)) {
-        $log_query = "INSERT INTO logs_atividades (id_user, id_dispositivo, acao, descricao, sucesso) 
-                      VALUES (?, ?, 'UPDATE_DEVICE', ?, 1)";
-        $log_stmt = $db->prepare($log_query);
-        $log_stmt->execute([
-            $user_id,
-            $device_id,
-            "Dispositivo atualizado"
-        ]);
 
-        $select_query = "SELECT id, nome, ip, tipo, sala, descricao, status, ativo, 
-                         data_cadastro, ultima_conexao 
+    $update_stmt = $db->prepare($update_query);
+
+    if ($update_stmt->execute($update_values)) {
+        $log_query = "INSERT INTO logs_atividades (id_user, id_dispositivo, acao, descricao, sucesso)
+                      VALUES (?, ?, 'UPDATE_DEVICE', ?, 1)";
+        $log_stmt  = $db->prepare($log_query);
+        $log_stmt->execute([$user_id, $device_id, "Dispositivo atualizado"]);
+
+        $select_query = "SELECT id, nome, ip, tipo, sala, descricao, status, ativo,
+                         data_cadastro, ultima_conexao
                          FROM dispositivos WHERE id = ?";
         $select_stmt = $db->prepare($select_query);
         $select_stmt->execute([$device_id]);
@@ -205,16 +144,16 @@ try {
         echo json_encode([
             "success" => true,
             "message" => "Dispositivo atualizado com sucesso",
-            "data" => [
-                "id" => (int)$updated_device['id'],
-                "nome" => $updated_device['nome'],
-                "ip" => $updated_device['ip'],
-                "tipo" => $updated_device['tipo'],
-                "sala" => $updated_device['sala'],
-                "descricao" => $updated_device['descricao'] ?? '',
-                "status" => $updated_device['status'],
-                "ativo" => (bool)$updated_device['ativo'],
-                "data_cadastro" => $updated_device['data_cadastro'],
+            "data"    => [
+                "id"             => (int)$updated_device['id'],
+                "nome"           => $updated_device['nome'],
+                "ip"             => $updated_device['ip'],
+                "tipo"           => $updated_device['tipo'],
+                "sala"           => $updated_device['sala'],
+                "descricao"      => $updated_device['descricao'] ?? '',
+                "status"         => $updated_device['status'],
+                "ativo"          => (bool)$updated_device['ativo'],
+                "data_cadastro"  => $updated_device['data_cadastro'],
                 "ultima_conexao" => $updated_device['ultima_conexao']
             ]
         ], JSON_UNESCAPED_UNICODE);
@@ -223,14 +162,12 @@ try {
     }
 
 } catch (Exception $e) {
-    error_log("ERRO EM UPDATE.PHP: " . $e->getMessage());
-    error_log("Stack trace: " . $e->getTraceAsString());
-    
+    error_log("ERRO EM update.php (devices): " . $e->getMessage());
+
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "Erro interno do servidor",
-        "error" => $e->getMessage()
+        "message" => "Erro interno do servidor"
     ], JSON_UNESCAPED_UNICODE);
 }
 ?>

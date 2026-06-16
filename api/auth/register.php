@@ -1,9 +1,11 @@
 <?php
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
+header("X-Content-Type-Options: nosniff");
+header("X-Frame-Options: DENY");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -19,13 +21,13 @@ include_once '../middleware/rate_limiter.php';
 $database = new Database();
 $db = $database->getConnection();
 
-$limiter    = new RateLimiter($db);
-$ip_origem  = $_SERVER['REMOTE_ADDR'];
+$limiter   = new RateLimiter($db);
+$ip_origem = $_SERVER['REMOTE_ADDR'];
 
 $limiter->check('Register', $ip_origem, 5, 10);
 
-$user = new User($db);
-$log = new Log($db);
+$user         = new User($db);
+$log          = new Log($db);
 $notification = new Notification($db);
 
 $data = json_decode(file_get_contents("php://input"));
@@ -78,16 +80,14 @@ if ($stmt->rowCount() > 0) {
     exit();
 }
 
-$user->nome = $data->name;
-$user->email = $data->email;
-$user->senha = password_hash($data->password, PASSWORD_BCRYPT);
-$user->tipo_usuario = 'professor'; 
-$user->ativo = 1;
+$user->nome        = $data->name;
+$user->email       = $data->email;
+$user->senha       = password_hash($data->password, PASSWORD_BCRYPT);
+$user->tipo_usuario = 'professor';
+$user->ativo       = 1;
 
 try {
     if ($user->create()) {
-        $ip_origem = $_SERVER['REMOTE_ADDR'];
-        
         $log->create(
             $user->id,
             'CADASTRO_USUARIO',
@@ -95,29 +95,29 @@ try {
             $ip_origem,
             1
         );
-        
+
         $notification->create(
             $user->id,
             'sucesso',
             'Bem-vindo ao Sistema!',
             'Sua conta foi criada com sucesso. Você já pode começar a gerenciar seus dispositivos.'
         );
-        
+
         $token = base64_encode(json_encode([
-            'id' => $user->id,
+            'id'    => $user->id,
             'email' => $user->email,
-            'exp' => time() + (60 * 60 * 24)
+            'exp'   => time() + (60 * 60 * 24)
         ]));
-        
+
         http_response_code(201);
         echo json_encode([
             "success" => true,
             "message" => "Cadastro realizado com sucesso!",
-            "token" => $token,
-            "user" => [
-                "id" => $user->id,
-                "nome" => $user->nome,
-                "email" => $user->email,
+            "token"   => $token,
+            "user"    => [
+                "id"           => $user->id,
+                "nome"         => $user->nome,
+                "email"        => $user->email,
                 "tipo_usuario" => $user->tipo_usuario
             ]
         ]);
@@ -129,10 +129,11 @@ try {
         ]);
     }
 } catch (Exception $e) {
+    error_log("Erro em register.php: " . $e->getMessage());
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "Erro no servidor: " . $e->getMessage()
+        "message" => "Erro no servidor. Tente novamente."
     ]);
 }
 ?>

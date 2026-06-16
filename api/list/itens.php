@@ -1,12 +1,11 @@
 <?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Methods: POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Max-Age: 3600");
 header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("X-Content-Type-Options: nosniff");
+header("X-Frame-Options: DENY");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -16,68 +15,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 try {
     include_once '../../config/database.php';
     include_once '../../models/list.php';
+    include_once '../middleware/auth.php';
 
-    // Extrai o token
-    $token = null;
-    
-    if (function_exists('getallheaders')) {
-        $headers = getallheaders();
-        if (isset($headers['Authorization'])) {
-            $token = str_replace('Bearer ', '', $headers['Authorization']);
-        }
-    }
-    
-    if (!$token && isset($_SERVER['HTTP_AUTHORIZATION'])) {
-        $token = str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']);
-    }
-    
-    if (!$token && isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION'])) {
-        $token = str_replace('Bearer ', '', $_SERVER['REDIRECT_HTTP_AUTHORIZATION']);
-    }
-
-    if (!$token) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Token não fornecido"
-        ]);
-        exit();
-    }
-
-    // Valida o token
-    try {
-        $decoded = json_decode(base64_decode($token));
-        
-        if (!$decoded || !isset($decoded->id) || !isset($decoded->exp)) {
-            throw new Exception("Token inválido");
-        }
-        
-        if ($decoded->exp < time()) {
-            throw new Exception("Token expirado");
-        }
-        
-        $user_id = $decoded->id;
-        
-    } catch (Exception $e) {
-        http_response_code(401);
-        echo json_encode([
-            "success" => false,
-            "message" => "Token inválido ou expirado"
-        ]);
-        exit();
-    }
+    $authUser = requireAuth();
+    $user_id  = $authUser['id'];
 
     $database = new Database();
-    $db = $database->getConnection();
-    
-    if (!$db) {
-        throw new Exception("Falha na conexão com o banco de dados");
-    }
+    $db       = $database->getConnection();
 
-    $lista = new Lista($db);
+    $lista  = new Lista($db);
     $method = $_SERVER['REQUEST_METHOD'];
 
-    // POST - Adicionar novo item
     if ($method === 'POST') {
         $data = json_decode(file_get_contents("php://input"));
 
@@ -97,17 +45,13 @@ try {
             echo json_encode([
                 "success" => true,
                 "message" => "Item adicionado com sucesso",
-                "data" => [
-                    "id" => $item_id
-                ]
+                "data"    => ["id" => $item_id]
             ], JSON_UNESCAPED_UNICODE);
         } else {
             throw new Exception("Erro ao adicionar item");
         }
-    }
-    
-    // PUT - Atualizar item
-    elseif ($method === 'PUT') {
+
+    } elseif ($method === 'PUT') {
         $data = json_decode(file_get_contents("php://input"));
 
         if (!$data || !isset($data->id) || !isset($data->id_lista)) {
@@ -120,7 +64,7 @@ try {
         }
 
         $dados_item = [
-            'texto' => isset($data->texto) ? trim($data->texto) : '',
+            'texto'     => isset($data->texto) ? trim($data->texto) : '',
             'concluido' => isset($data->concluido) ? $data->concluido : false
         ];
 
@@ -133,12 +77,10 @@ try {
         } else {
             throw new Exception("Erro ao atualizar item");
         }
-    }
-    
-    // DELETE - Deletar item
-    elseif ($method === 'DELETE') {
-        $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-        $id_lista = isset($_GET['id_lista']) ? intval($_GET['id_lista']) : 0;
+
+    } elseif ($method === 'DELETE') {
+        $id       = isset($_GET['id'])       ? (int)$_GET['id']       : 0;
+        $id_lista = isset($_GET['id_lista']) ? (int)$_GET['id_lista'] : 0;
 
         if ($id <= 0 || $id_lista <= 0) {
             http_response_code(400);
@@ -158,24 +100,19 @@ try {
         } else {
             throw new Exception("Erro ao deletar item");
         }
-    }
-    
-    else {
+
+    } else {
         http_response_code(405);
-        echo json_encode([
-            "success" => false,
-            "message" => "Método não permitido"
-        ]);
+        echo json_encode(["success" => false, "message" => "Método não permitido"]);
     }
 
 } catch (Exception $e) {
-    error_log("ERRO EM ITENS.PHP: " . $e->getMessage());
-    
+    error_log("ERRO EM itens.php (list): " . $e->getMessage());
+
     http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "Erro interno do servidor",
-        "error" => $e->getMessage()
+        "message" => "Erro interno do servidor"
     ], JSON_UNESCAPED_UNICODE);
 }
 ?>

@@ -3,18 +3,36 @@ Header set Access-Control-Allow-Origin "*"
 Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
 Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With , ngrok-skip-browser-warning"
 
+# Headers de segurança
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
 # Importante: Passar o header Authorization para o PHP
 RewriteEngine On
 RewriteCond %{HTTP:Authorization} ^(.*)
 RewriteRule .* - [e=HTTP_AUTHORIZATION:%1]
 
-# Configuração para PHP
+# Configuração para PHP — erros apenas em log, nunca no output
 <IfModule mod_php7.c>
-    php_flag display_errors on
-    php_value error_reporting E_ALL
+    php_flag display_errors off
+    php_flag log_errors on
+    php_value error_reporting 32767
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag display_errors off
+    php_flag log_errors on
+    php_value error_reporting 32767
 </IfModule>
 
-# Permitir acesso aos arquivos PHP
+# Negar acesso direto a arquivos de configuração
+<Files "database.php">
+    Order deny,allow
+    Deny from all
+</Files>
+
+# Permitir acesso aos arquivos PHP da API
 <Files "*.php">
     Order allow,deny
     Allow from all
